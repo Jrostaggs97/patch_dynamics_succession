@@ -6,9 +6,9 @@ import numpy as np
 Na = 2000              # number of age grid cells
 amax = 20.0            # maximum age
 tmax = 2.0            # maximum integration time
-birth = 2.0          # recruitment rate
+birth_rate = 2.0          # recruitment rate
 death_rate = 1.0      # adult mortality rate
-tau = 10              # time to first reproduction (delay)
+tau = 1              # time to first reproduction (delay)
 gamma = 0.5            # disturbance rate
 alpha1 = .001          # intraspecies competition coefficient
 

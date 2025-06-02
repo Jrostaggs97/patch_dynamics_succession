@@ -11,7 +11,7 @@ def reproduction(a, n_lag, rho, b, alpha1):
     Returns a full vector with that same integral.
     """
     birth_func = np.maximum(1.0 - alpha1 * n_lag, 0.0)
-    integral = np.trapz(rho * n_lag * birth_func, a)
+    integral = np.trapezoid(rho * n_lag * birth_func, a)
     return np.full(n_lag.shape, integral)
 
 @njit
