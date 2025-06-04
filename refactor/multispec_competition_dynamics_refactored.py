@@ -3,9 +3,10 @@
 # %% imports
 import numpy as np
 import matplotlib.pyplot as plt
-
-# ensure: pip install ddeint
+from numba import njit, prange
 from ddeint import ddeint
+# ensure: pip install ddeint
+
 from multispec_config_refactored import a, da, rho, tau_idx, tmax, tau, birth_rate, death_rate, alpha, init_history, k, Na
 from demographic_funcs_refactored import reproduction, death, flux
 
@@ -13,49 +14,51 @@ b = birth_rate
 mu = death_rate
 
 # %% Multi species RHS func, history func, and solver function
-def rhs_multi(Y, t):
-    # 1) pull back the flat state and reshape
-    y     = np.reshape(Y(t),(k,Na+1))        # shape (k*(n+1),) -> (k,Na+1)
 
-    # prepare storage
-    dydt = np.zeros_like(y)
 
-    # 2) common term: at each age, sum all species at lagged time
-    #Nlag_sum = np.sum(y_lag, axis=0)   # shape (Na+1,)
 
-    for i in range(k):
-       
-        y_lag = np.reshape( Y(t-tau[i]), (k,Na+1) )
-        
-        lag_sum = np.sum(y_lag)
-        # 2a) death and flux as before
-        Death_i = death(y[i], mu[i])            # vector length Na+1
-        Flux_i  = flux(y[i])                    # vector length Na+1
 
-        # 2b) nonlocal reproduction for species i
-        #    ∫ rho(a) * nlag_i(a) * [1 - alpha_i * Σ_j nlag_j(a)] da
-        birth_integral = np.trapezoid(
-            rho * y_lag[i] * (1 - alpha[i] * lag_sum),
-            a
-        )
-        Repo_i = b[i]*np.full_like(y[i], birth_integral)
+@njit(parallel=True)
+def compute_rhs_numba(y_now, lagged_n_i, S_i_arr, a, da, rho, birth_rate, alpha, tau_idx, death_rate):
+    k, Na1 = y_now.shape
+    dydt = np.zeros_like(y_now)
+    for i in prange(k):
+        n_i_lag = lagged_n_i[i, :]   # (Na+1,)
+        S_i     = S_i_arr[i, :]      # (Na+1,)
 
-        # 2c) build the advection + demo derivative
-        #     same splitting at tau_idx
-        ddt = np.zeros_like(y[i])
-        # advection only for ages < tau
+        Death_i = death(y_now[i], death_rate[i])
+        Flux_i  = flux(y_now[i])
+
+        Repo_i = reproduction(a, n_i_lag, S_i, rho, birth_rate[i], alpha[i], tau_idx[i])
+
+        ddt = np.zeros(Na1)
         ddt[1:tau_idx[i]] = -(Flux_i[2:tau_idx[i]+1] - Flux_i[1:tau_idx[i]]) / da
-        # full dynamics for ages >= tau
         adv = -(Flux_i[tau_idx[i]+1:] - Flux_i[tau_idx[i]:-1]) / da
         ddt[tau_idx[i]+1:] = Repo_i[tau_idx[i]+1:] \
-                          - Death_i[tau_idx[i]+1:]*y[i][tau_idx[i]+1:] \
-                          + adv
-        ddt[0] = 0.0
-
+                             - Death_i[tau_idx[i]+1:] * y_now[i][tau_idx[i]+1:] \
+                             + adv
+        ddt[0] = 0
         dydt[i] = ddt
+    return dydt
 
-    # 3) flatten back to 1-D for the solver
+def rhs_multi(Y, t):
+    y_now = np.reshape(Y(t), (k, Na+1))
+    # Precompute, for each species i, all n_j(a, t-tau_i)
+    lagged_states = []
+    lagged_n_i    = []
+    S_i_list      = []
+    for i in range(k):
+        lagged = np.reshape(Y(t - tau[i]), (k, Na+1))
+        lagged_states.append(lagged)
+        lagged_n_i.append(lagged[i, :])       # shape (Na+1,)
+        S_i_list.append(np.sum(lagged, axis=0))  # shape (Na+1,)
+    # Convert to arrays for Numba
+    lagged_n_i = np.array(lagged_n_i)    # shape (k, Na+1)
+    S_i_arr    = np.array(S_i_list)      # shape (k, Na+1)
+
+    dydt = compute_rhs_numba(y_now, lagged_n_i, S_i_arr, ...)
     return dydt.reshape(k*(Na+1))
+
 
 def history_multi(t):
     # build history function (values that functions take outside natural time domain. I.e. t<0)

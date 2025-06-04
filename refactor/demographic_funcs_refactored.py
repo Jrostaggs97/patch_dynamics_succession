@@ -4,14 +4,15 @@ import numpy as np
 from numba import njit
 
 @njit
-def reproduction(a, n_lag, rho, b, alpha1):
+def reproduction( a, n_lag, Nlag_sum rho, b, alpha, tau_idx):
     """
     Nonlocal birth term:
       ∫ rho(a)*n_lag(a)*max(1-alpha1*n_lag(a),0) da
     Returns a full vector with that same integral.
     """
-    birth_func = np.maximum(1.0 - alpha1 * n_lag, 0.0)
-    integral = np.trapezoid(rho * n_lag * birth_func, a)
+    birth_comp = np.maximum(1.0 - alpha * Nlag_sum[tau_idx,:], 0.0)
+    # Only integrate from age-index tau_idx_i to end
+    integral = b*np.trapz(rho[tau_idx:] * n_lag[tau_idx:] * birth_comp, a[tau_idx:])
     return np.full(n_lag.shape, integral)
 
 @njit

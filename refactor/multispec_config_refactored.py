@@ -59,9 +59,9 @@ alpha      = 0.001 * np.ones(k)
 
 
 #Manual inputs
-Na = 1000              # number of age grid cells
-amax = 20.0            # maximum age
-tmax = 1.0            # maximum integration time
+Na = 100              # number of age grid cells
+amax = 10.0            # maximum age
+tmax = 0.5            # maximum integration time
 gamma = 0.5            # disturbance rate
   
 
