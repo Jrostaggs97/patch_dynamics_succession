@@ -4,7 +4,7 @@ import numpy as np
 from numba import njit
 
 @njit
-def reproduction( a, n_lag, Nlag_sum rho, b, alpha, tau_idx):
+def reproduction( a, n_lag, Nlag_sum, rho, b, alpha, tau_idx):
     """
     Nonlocal birth term:
       ∫ rho(a)*n_lag(a)*max(1-alpha1*n_lag(a),0) da
