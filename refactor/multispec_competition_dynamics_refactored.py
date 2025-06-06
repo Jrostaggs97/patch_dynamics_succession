@@ -1,11 +1,17 @@
 #multispec_competition_dynamics.py
 
 # %% imports
+import time
 import numpy as np
 import matplotlib.pyplot as plt
+import numba
 from numba import njit, prange
-from ddeint import ddeint
+
+from my_ddeint.ddeint import ddeint
+
+#from ddeint import ddeint
 # ensure: pip install ddeint
+
 
 from multispec_config_refactored import a, da, rho, tau_idx, tmax, tau, birth_rate, death_rate, alpha, init_history, k, Na
 from demographic_funcs_refactored import reproduction, death, flux
@@ -16,6 +22,7 @@ mu = death_rate
 # %% Multi species RHS func, history func, and solver function
 
 
+print("Numba is set to use", numba.config.NUMBA_NUM_THREADS, "threads by default.")
 
 
 @njit(parallel=True)
@@ -56,7 +63,7 @@ def rhs_multi(Y, t):
     lagged_n_i = np.array(lagged_n_i)    # shape (k, Na+1)
     S_i_arr    = np.array(S_i_list)      # shape (k, Na+1)
 
-    dydt = compute_rhs_numba(y_now, lagged_n_i, S_i_arr, ...)
+    dydt = compute_rhs_numba(y_now, lagged_n_i, S_i_arr, a, da, rho, birth_rate, alpha, tau_idx, death_rate)
     return dydt.reshape(k*(Na+1))
 
 
@@ -74,7 +81,14 @@ def history_multi(t):
 
 # %% Call solver
 t = np.arange(0, tmax, .001)
+
+
+start_solve  = time.perf_counter()
+
 multi_sol = ddeint(rhs_multi, history_multi, t)
+end_solve = time.perf_counter()
+print(f"[Timing] DDE solve time: {end_solve - start_solve:.3f} s")
+
 # sol has shape (len(t), k*(Na+1))
 # you can reshape each row:
 multi_sol_matrix = multi_sol.reshape(len(t), k, Na+1)
@@ -88,6 +102,11 @@ Na1 = len(a)                  # Na+1
 sol = multi_sol.reshape(len(t), k, Na1)
 # Compute N_t with shape (Nt, k)
 N_t = np.trapezoid(rho[np.newaxis, np.newaxis, :] * sol, x=a, axis=2)
+
+
+
+
+print(f"Total script time: {end_total - start_total:.3f} seconds")
 
 # %%Plotting
 # — Plot total abundances N_i(t) for each species —
