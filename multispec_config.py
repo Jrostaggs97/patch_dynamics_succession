@@ -6,7 +6,7 @@ import numpy as np
 k = 2                   # number of species
 Na = 2000              # number of age grid cells
 amax = 20.0            # maximum age
-tmax = 1.0            # maximum integration time
+tmax = 5.0            # maximum integration time
 birth_rate = [2.0,1.4]          # recruitment rate
 death_rate = [.5,.5]      # adult mortality rate
 tau = [1,.5]            # time to first reproduction (delay)

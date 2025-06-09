@@ -111,3 +111,5 @@ plt.legend(loc="best")
 plt.title("Age distribution at final time")
 plt.tight_layout()
 plt.show()
+
+# %%
