@@ -63,13 +63,13 @@ class dde(scipy.integrate.ode):
 
         # ── INSERT STIFF (BDF) SETTINGS ─────────────────────────────────
         # Force VODE to use its BDF (stiff) algorithm, with tighter tolerances:
-        self.set_integrator(
-            'vode',
-            method='bdf',
-            rtol=1e-6,
-            atol=1e-8,
-            nsteps=8000
-        )
+        #self.set_integrator(
+        #    'vode',
+        #    method='bdf',
+        #    rtol=1e-6,
+        #    atol=1e-8,
+        #    nsteps=8000
+        #)
         # ────────────────────────────────────────────────────────────────────
 
         self.set_f_params(None)

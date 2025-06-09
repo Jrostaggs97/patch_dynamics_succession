@@ -50,7 +50,7 @@ def load_species_params(csv_path):
 # ─── Grid & parameters ────────────────────────────────────────────────────────
 #Read in from file
 species_names, birth_list, death_list, tau_list = load_species_params(file)
-k = len(species_names)
+k = 2#len(species_names)
 # Convert lists to NumPy arrays 
 birth_rate = birth_list
 death_rate = death_list
@@ -59,9 +59,9 @@ alpha      = 0.001 * np.ones(k)
 
 
 #Manual inputs
-Na = 100              # number of age grid cells
-amax = 10.0            # maximum age
-tmax = 0.5            # maximum integration time
+Na = 1000              # number of age grid cells
+amax = 20.0            # maximum age
+tmax = 10            # maximum integration time
 gamma = 0.5            # disturbance rate
   
 

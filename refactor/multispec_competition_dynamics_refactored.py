@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numba
 from numba import njit, prange
 
-from my_ddeint.ddeint import ddeint
+from my_ddeint.ddeint import ddeint #if you want to customize (e.g. use a stiff solver)
 
 #from ddeint import ddeint
 # ensure: pip install ddeint
@@ -86,6 +86,7 @@ t = np.arange(0, tmax, .001)
 start_solve  = time.perf_counter()
 
 multi_sol = ddeint(rhs_multi, history_multi, t)
+
 end_solve = time.perf_counter()
 print(f"[Timing] DDE solve time: {end_solve - start_solve:.3f} s")
 
@@ -106,8 +107,6 @@ N_t = np.trapezoid(rho[np.newaxis, np.newaxis, :] * sol, x=a, axis=2)
 
 
 
-print(f"Total script time: {end_total - start_total:.3f} seconds")
-
 # %%Plotting
 # — Plot total abundances N_i(t) for each species —
 
@@ -119,7 +118,7 @@ plt.ylabel("Total abundance $N_i(t)$")
 plt.legend(loc="best")
 plt.title("Total abundance vs. time")
 plt.tight_layout()
-plt.show()
+plt.savefig("debug_total_abundance.png")
 
 
 # — Plot final age‐distribution n_i(a, t_max) for each species —
@@ -133,4 +132,4 @@ plt.ylabel(r"$n_i(a, t_{\max})$")
 plt.legend(loc="best")
 plt.title("Age distribution at final time")
 plt.tight_layout()
-plt.show()
+plt.savefig("debug_age_dist.png")
