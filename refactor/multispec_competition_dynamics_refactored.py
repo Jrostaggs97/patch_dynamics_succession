@@ -5,7 +5,14 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import numba
+import os
+import json
 from numba import njit, prange
+from datetime import datetime
+
+
+
+
 
 from my_ddeint.ddeint import ddeint #if you want to customize (e.g. use a stiff solver)
 
@@ -13,16 +20,23 @@ from my_ddeint.ddeint import ddeint #if you want to customize (e.g. use a stiff 
 # ensure: pip install ddeint
 
 
-from multispec_config_refactored import a, da, rho, tau_idx, tmax, tau, birth_rate, death_rate, alpha, init_history, k, Na
+from multispec_config_refactored import a, da, rho, tau_idx, tmax, tau, birth_rate, death_rate, alpha, gamma, init_history, generate_initial_profiles, k, Na
 from demographic_funcs_refactored import reproduction, death, flux
 
+
+
+# create initial condition
 b = birth_rate
 mu = death_rate
+
+profiles = generate_initial_profiles(a, k)    # list of k arrays
+initial_flat = np.concatenate(profiles)        # shape (k*(Na+1),)
+
 
 # %% Multi species RHS func, history func, and solver function
 
 
-print("Numba is set to use", numba.config.NUMBA_NUM_THREADS, "threads by default.")
+#print("Numba is set to use", numba.config.NUMBA_NUM_THREADS, "threads by default.")
 
 
 @njit(parallel=True)
@@ -66,18 +80,20 @@ def rhs_multi(Y, t):
     dydt = compute_rhs_numba(y_now, lagged_n_i, S_i_arr, a, da, rho, birth_rate, alpha, tau_idx, death_rate)
     return dydt.reshape(k*(Na+1))
 
+    #return dydt.reshape(k*(Na+1))
+
 
 def history_multi(t):
-    # build history function (values that functions take outside natural time domain. I.e. t<0)
-    # Here we assume the history function is the initial value repeated
-    # build initial n0 for each species (e.g., using init_history)
-    # here we assume same init for all k
-    base = init_history(a)        # shape (Na+1,)
-    #stacked = np.vstack([base]*k) # shape (k, Na+1)
-    #print("stacked.shape =", stacked.shape)   # debug print
-    #print("stacked.size =", stacked.size)     # debug print
-    #stacked.reshape(k*(Na+1))
-    return base
+    # Return the same precomputed initial condition for all t ≤ 0
+    return initial_flat
+
+
+
+#unique id for saving files
+run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+output_dir = os.path.join("outputs", run_id)
+os.makedirs(output_dir, exist_ok=True)
+
 
 # %% Call solver
 t = np.arange(0, tmax, .001)
@@ -133,3 +149,34 @@ plt.legend(loc="best")
 plt.title("Age distribution at final time")
 plt.tight_layout()
 plt.savefig("debug_age_dist.png")
+
+
+
+
+# Gather parameters into a dict
+params = {
+    "tau": [float(x) for x in tau],
+    "birth_rate": [float(x) for x in birth_rate],
+    "death_rate": [float(x) for x in death_rate],
+    "gamma": float(gamma),
+    "alpha": [float(x) for x in alpha]
+}
+# Write to outputs/<run_id>/params.json
+with open(os.path.join(output_dir, "params.json"), "w") as f:
+    json.dump(params, f, indent=2)
+
+
+np.savez(
+    os.path.join(output_dir, "results.npz"),
+    multi_sol_matrix=multi_sol_matrix,
+    N_t=N_t,
+    t=t,
+    a=a
+)   
+
+#read data back in with 
+#data = np.load("outputs/<run_id>/results.npz")
+#multi_sol_matrix = data["multi_sol_matrix"]
+#N_t              = data["N_t"]
+#t                = data["t"]
+#a                = data["a"]
