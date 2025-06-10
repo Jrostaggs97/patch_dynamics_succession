@@ -6,19 +6,18 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import matplotlib.patches as mpatches
 
-def coex_check(k, b_vec, mu_vec, tau_vec, alpha, gamma):
+def coex_check(k, b_vec, mu_vec, tau_vec, alpha_vec, gamma):
+    # we restrict to the two species case 
+    k=2
     da = 0.005
     a_grid = np.arange(0, 1000 + da, da)
     n_tilde_mat = np.zeros((len(a_grid), k))
-    n_mat = np.zeros((len(a_grid), k))
     rho = gamma * np.exp(-gamma * a_grid)  # shape: (len(a_grid),)
     tau_idx_vec = (tau_vec / da).astype(int)
 
-    alpha_vec = alpha * np.ones(k)
     interaction_mat = np.zeros((k, k))
     persist_vec = np.zeros(k)
     persist_check = np.zeros(k)
-    eq_abund_vec = np.zeros(k)
 
     for i in range(k):
         n_tilde = (b_vec[i] / mu_vec[i]) * (1 - np.exp(-mu_vec[i] * (a_grid - tau_vec[i])))
@@ -34,24 +33,11 @@ def coex_check(k, b_vec, mu_vec, tau_vec, alpha, gamma):
             interaction_mat[i, j] = interaction
             interaction_mat[j, i] = interaction
 
-    try:
-        S_vec = np.linalg.solve(interaction_mat, persist_vec)
-    except np.linalg.LinAlgError:
-        print("Matrix is singular or ill-conditioned.")
-        S_vec = np.zeros(k)
+    S_vec = np.zeros((2,1))
+    S_vec[1] = alpha_vec[1]*(persist_vec[1]*interaction_mat[2,2]* - persist_vec[2]*interaction_mat[1,2])
+    S_vec[2] = alpha_vec[2]*(persist_vec[2]*interaction_mat[1,1]* - persist_vec[1]*interaction_mat[2,1])
 
-    for i in range(k):
-        n_mat[:, i] = S_vec[i] * n_tilde_mat[:, i]
-
-    det_val = np.linalg.det(interaction_mat)
-    if det_val < 1e-10:
-        print("Getting ill conditioned")
-        print("Det =", det_val)
-
-    for i in range(k):
-        eq_abund_vec[i] = np.trapz(rho * n_mat[:, i], a_grid)
-
-    return S_vec, persist_vec, eq_abund_vec, interaction_mat
+    return S_vec
 
 
 
@@ -65,9 +51,13 @@ gamma = 0.6
 tau_j = 0.6
 b_j = 60
 
-def generate_coex_mat():
+
+def generate_coex_mat(trait_1, trait_2,):
     # again I think we want to pass in like the cohorted table basically
     # Ranges for tau_i and b_i
+
+    #Want to grab column corresponding to focal trait 1 and focal trait 2 from our data table ---- no no. We need to just take in the vectors
+
     tau_i_vec = np.arange(tau_j - 0.01, tau_j + 1.001, 0.001)
     b_i_vec = np.arange(b_j - 0.05, b_j + 30.001, 0.001)
     tau_i_grid, b_i_grid = np.meshgrid(tau_i_vec, b_i_vec)
@@ -98,7 +88,7 @@ def generate_coex_mat():
     # Anchor for colormap scale
     Coex[-1, -1] = 0
 
-return Coex
+    return Coex
 
 
 

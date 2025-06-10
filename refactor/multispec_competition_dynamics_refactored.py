@@ -22,13 +22,22 @@ from my_ddeint.ddeint import ddeint #if you want to customize (e.g. use a stiff 
 
 from multispec_config_refactored import a, da, rho, tau_idx, tmax, tau, birth_rate, death_rate, alpha, gamma, init_history, generate_initial_profiles, k, Na
 from demographic_funcs_refactored import reproduction, death, flux
+from analytic_funcs import one_spec_analytic_eq, one_spec_analytic_total_density_eq, two_spec_analytic_eq, two_spec_analytica_totaldensity_eq
 
 
-
-# create initial condition
+#for notational convenience
 b = birth_rate
 mu = death_rate
 
+##-------------------------- testing--------------------------##
+k = 1
+b = [3]
+mu = [1]
+tau = [.75]
+tau_idx = [int(tau[0]/da)]
+##------------------------------------------------------------##
+
+# create initial condition
 profiles = generate_initial_profiles(a, k)    # list of k arrays
 initial_flat = np.concatenate(profiles)        # shape (k*(Na+1),)
 
@@ -91,8 +100,7 @@ def history_multi(t):
 
 #unique id for saving files
 run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-output_dir = os.path.join("outputs", run_id)
-os.makedirs(output_dir, exist_ok=True)
+
 
 
 # %% Call solver
@@ -118,10 +126,11 @@ multi_sol_matrix = multi_sol.reshape(len(t), k, Na+1)
 Na1 = len(a)                  # Na+1
 sol = multi_sol.reshape(len(t), k, Na1)
 # Compute N_t with shape (Nt, k)
-N_t = np.trapezoid(rho[np.newaxis, np.newaxis, :] * sol, x=a, axis=2)
+N_t = np.trapezoid(rho * sol, x=a, axis=2)
 
-
-
+# Analytic equilibrium
+n_eq = one_spec_analytic_eq(tau[0], birth_rate[0], death_rate[0], alpha[0], gamma, a)
+N_eq = one_spec_analytic_total_density_eq(n_eq, a, rho)
 
 # %%Plotting
 # — Plot total abundances N_i(t) for each species —
@@ -129,6 +138,8 @@ N_t = np.trapezoid(rho[np.newaxis, np.newaxis, :] * sol, x=a, axis=2)
 plt.figure(figsize=(7, 4))
 for i in range(k):
     plt.plot(t, N_t[:, i], label=f"Species {i+1}")
+
+plt.plot(t,N_eq*np.ones(len(t)), '--', label='Analytic $N_{eq}$')#only for one spec
 plt.xlabel("time $t$")
 plt.ylabel("Total abundance $N_i(t)$")
 plt.legend(loc="best")
@@ -143,6 +154,7 @@ plt.figure(figsize=(7, 4))
 for i in range(k):
     n_final_i = sol[-1, i, :]     # sol has shape (Nt, k, Na1)
     plt.plot(a, n_final_i, label=f"Species {i+1}")
+plt.plot(a, n_eq, '--', label='Analytic $n_{eq}(a)$') 
 plt.xlabel("age $a$")
 plt.ylabel(r"$n_i(a, t_{\max})$")
 plt.legend(loc="best")
@@ -150,8 +162,17 @@ plt.title("Age distribution at final time")
 plt.tight_layout()
 plt.savefig("debug_age_dist.png")
 
-
-
+error = abs(n_final_i - n_eq)
+plt.figure()
+plt.plot(a, error, label='Error $n_{approx}-n_{eq}$')
+plt.xlabel('age $a$')
+plt.ylabel('Error')
+plt.legend()
+plt.tight_layout()
+plt.savefig("ptwise_error_age_dist.png")
+#put results into outputs directory
+output_dir = os.path.join("outputs", run_id)
+os.makedirs(output_dir, exist_ok=True)
 
 # Gather parameters into a dict
 params = {
