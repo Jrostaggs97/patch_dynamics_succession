@@ -1,5 +1,6 @@
 # imports
 import numpy as np
+import matplotlib.pyplot as plt
 
 # holds one and two species analytical calculations
 

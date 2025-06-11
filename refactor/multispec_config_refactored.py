@@ -108,7 +108,7 @@ def cohortize_species(params, n, split_on="long tau"):
 scale = 100
 Na = 2000              # number of age grid cells
 amax = 20.0            # maximum age
-tmax = 7.0            # maximum integration time
+tmax = 10.0            # maximum integration time
 gamma = 0.5            # disturbance rate
 cohort = "y" # option here for cohorts, just big if statement thing. 
 num_cohorts = 2 #number of cohorts
@@ -163,6 +163,8 @@ def generate_initial_profiles(a_grid, k):
         # compute Gaussian: exp(-((a - shift)^2) / (2*width^2))
         gauss = np.exp(-((a_grid - shift) ** 2) / (10 * width**2))
         # zero out ages below tau[i]
+        ##---- manual set for testing ---##
+        gauss = .25*np.exp(-((1/2)*(a_grid - 4)** 4))
         gauss[a_grid <= long_tau[i]] = 0.0
         profiles.append(gauss)
     return profiles
