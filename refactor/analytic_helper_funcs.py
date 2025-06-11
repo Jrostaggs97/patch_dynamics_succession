@@ -13,7 +13,7 @@ def coex_check(k, b_vec, mu_vec, tau_vec, alpha_vec, gamma):
     a_grid = np.arange(0, 1000 + da, da)
     n_tilde_mat = np.zeros((len(a_grid), k))
     rho = gamma * np.exp(-gamma * a_grid)  # shape: (len(a_grid),)
-    tau_idx_vec = (tau_vec / da).astype(int)
+    tau_idx_vec = [int(t / da) for t in tau_vec]  
 
     interaction_mat = np.zeros((k, k))
     persist_vec = np.zeros(k)
@@ -34,8 +34,8 @@ def coex_check(k, b_vec, mu_vec, tau_vec, alpha_vec, gamma):
             interaction_mat[j, i] = interaction
 
     S_vec = np.zeros((2,1))
-    S_vec[1] = alpha_vec[1]*(persist_vec[1]*interaction_mat[2,2]* - persist_vec[2]*interaction_mat[1,2])
-    S_vec[2] = alpha_vec[2]*(persist_vec[2]*interaction_mat[1,1]* - persist_vec[1]*interaction_mat[2,1])
+    S_vec[0] = alpha_vec[0]*(persist_vec[0]*interaction_mat[1,1]* - persist_vec[1]*interaction_mat[0,1])
+    S_vec[1] = alpha_vec[1]*(persist_vec[1]*interaction_mat[0,0]* - persist_vec[0]*interaction_mat[1,0])
 
     return S_vec
 
@@ -44,47 +44,79 @@ def coex_check(k, b_vec, mu_vec, tau_vec, alpha_vec, gamma):
 ## ------- need to actually turn the following into functions ------- ## 
 # can probaobly turn the heat map coexstience code intoa function as well 
 # Parameters
-alpha = 1
-mu = 20
-gamma = 0.6
-
-tau_j = 0.6
-b_j = 60
 
 
-def generate_coex_mat(trait_1, trait_2,):
-    # again I think we want to pass in like the cohorted table basically
-    # Ranges for tau_i and b_i
 
-    #Want to grab column corresponding to focal trait 1 and focal trait 2 from our data table ---- no no. We need to just take in the vectors
+# I think what we want to do is make an updated species data table that has alpha and gamma 
+# now you input the header string of the two traits you want to see the trade off for
+# e.g. tau, birth
+# We then access the minimum value/row for trait 1 header
+# this is our trait_1_val
 
-    tau_i_vec = np.arange(tau_j - 0.01, tau_j + 1.001, 0.001)
-    b_i_vec = np.arange(b_j - 0.05, b_j + 30.001, 0.001)
-    tau_i_grid, b_i_grid = np.meshgrid(tau_i_vec, b_i_vec)
+# spec_data is a table with a header column 
+def generate_coex_mat(spec_data, trait_1_header, trait_2_header, trait_1_max, trait_2_max,
+                      alt_1_header, alt_1_val, alt_2_header, alt_2_val, alt_3_header, alt_3_val):
+    
+    # go into table and find trait_1_header column then find minimum and that's trait 1 val
+    # in that same row find the column associated with trait_2_header and that's trait 2 val
 
-    # Persistences
-    P_i = b_i_grid * np.exp(-gamma * tau_i_grid) / (gamma + mu) - 1
-    P_j = b_j * np.exp(-gamma * tau_j) / (gamma + mu) - 1
+    # now we need to have a way to use the header info to assign the variables
+    # like a header to variable association kind of thing. 
 
-    # Intraspecific competition
-    A_i = alpha * 2 * (b_i_grid**2) * np.exp(-gamma * tau_i_grid) / ((gamma + mu) * (gamma + 2 * mu))
-    A_j = alpha * 2 * (b_j**2) * np.exp(-gamma * tau_j) / ((gamma + mu) * (gamma + 2 * mu))
+    #Get the species j (focal) row with the lowest value of trait_1
+    trait_1_val = spec_data[trait_1_header].min()
+    focal_row = spec_data[spec_data[trait_1_header] == trait_1_val].iloc[0]
+    trait_2_val = focal_row[trait_2_header]
 
-    # Interspecific competition
-    B1 = np.exp(mu * tau_i_grid) / ((gamma + mu) * mu)
-    B2 = gamma * np.exp(mu * tau_j) / (mu * (gamma + mu) * (gamma + 2 * mu))
-    B_coeff = b_j * b_i_grid * np.exp(-(gamma + mu) * tau_i_grid)
-    B = alpha * B_coeff * (B1 - B2)
+    gamma = focal_row["gamma"]
 
-    # Feasibility conditions
-    S_ij = P_i * A_j - B * P_j
-    S_ji = P_j * A_i - B * P_i
+    # Grid for species i over the trait ranges
+    trait_1_vec = np.arange(trait_1_val - .01, trait_1_max, trait_1_val*.02)
+    trait_2_vec = np.arange(trait_2_val - .01, trait_2_max, trait_2_val*.02)
+    trait_1_grid, trait_2_grid = np.meshgrid(trait_1_vec, trait_2_vec)
 
-    # Region codes
-    S_ij = (3/4) * (S_ij > 0).astype(float)
-    S_ji = (1/2) * (S_ji > 0).astype(float)
-    Coex = S_ij + S_ji
+    #Store fixed values for species j in a dictionary
+    trait_dict_j = {
+        trait_1_header: trait_1_val,
+        trait_2_header: trait_2_val,
+        alt_1_header: alt_1_val,
+        alt_2_header: alt_2_val,
+        alt_3_header: alt_3_val,
+        "gamma": gamma
+    }
 
+    # Intialize coexistence matrix ---- #have indexing/sizing problem around here
+    Coex = np.zeros_like(trait_1_grid)
+
+
+    # Yeah I think dispatching to coex_check will just be the easiest thing to do even though 
+    # we are paying a for loop price (we can parallelize if needed)
+
+    # We want to loop over the trait_1_vec and trait_2_vec and call coex_check with the correct assignment to 
+    # b_vec, mu_vec, tau_vec, alpha_vec, gamma that go into coex_check we then want to fill out a Coexistence matrix which 
+    # encodes for what trait_1 and trait_2 values yield coexistence S1 and S2>0, spec i wins S1>0 and S2<0, spec j wins S2<0 and S1>0, or neither wins both S1 and S2<0.
+    for i in range(len(trait_1_vec)-1):
+        for j in range(len(trait_2_vec)-1):
+            # Step 1: Copy the fixed trait values from species j
+            trait_dict_i = trait_dict_j.copy()
+
+            # Step 2: Overwrite the two traits being varied
+            trait_dict_i[trait_1_header] = trait_1_vec[i]
+            trait_dict_i[trait_2_header] = trait_2_vec[j]
+
+            # Step 3: Extract coex_check inputs from trait_dict_i and trait_dict_j
+            b_vec = [trait_dict_i["birth"], trait_dict_j["birth"]]
+            mu_vec = [trait_dict_i["death"], trait_dict_j["death"]]
+            tau_vec = [trait_dict_i["tau"], trait_dict_j["tau"]]
+            alpha_vec = [trait_dict_i["alpha"], trait_dict_j["alpha"]]
+            gamma = trait_dict_j["gamma"]  # shared
+    
+            S_vec = coex_check(2, b_vec, mu_vec, tau_vec, alpha_vec, gamma)
+
+            # Step 5: Encode outcome without if-statements
+            s1 = S_vec[0] > 0
+            s2 = S_vec[1] > 0
+            Coex[i, j] = (3/4) * s1 + (1/2) * s2
     # Anchor for colormap scale
     Coex[-1, -1] = 0
 
@@ -94,35 +126,54 @@ def generate_coex_mat(trait_1, trait_2,):
 
 #### --- Plotting the heatmap --- ####
 
-def coexistence_region_plotter(x_vec, y_vec, param_dict, x_label, y_label, title):
-    #want an input for the alternates
-    # like pass in a parameter dictionary that has the label and the value 
-    # or we pass in like a "full table" with first row as headers then the numeric values
-    # and then you specify which column is x and y? and all other columns are "fixed" so just 
-    # grab the first numeric value. 
+def coexistence_region_plotter(x_vec, y_vec, coex_mat, x_label, y_label, title,
+                               x_ref=None, y_ref=None):
+    """
+    Plots the coexistence region heatmap using a categorical colormap.
 
-    #Basically pass in the cohorted table and the coex mat
-    
-    # Custom colormap
+    Parameters:
+    -----------
+    x_vec : array
+        Values along the x-axis (e.g., tau_i).
+    y_vec : array
+        Values along the y-axis (e.g., b_i).
+    coex_mat : 2D array
+        Matrix of encoded coexistence outcomes.
+    x_label : str
+        LaTeX-formatted string for x-axis label (e.g., r"$\\tau_i$").
+    y_label : str
+        LaTeX-formatted string for y-axis label.
+    title : str
+        LaTeX-formatted title string.
+    x_ref : float, optional
+        Optional vertical reference line (e.g., focal species trait value).
+    y_ref : float, optional
+        Optional horizontal reference line.
+    """
+
+    # Define custom colormap
     cmap = ListedColormap([
         [1, 1, 1],   # Neither wins
-        [0, 0, 1],   # Spec j wins
-        [1, 0, 0],   # Spec i wins
-        [0, 0, 0]    # Coexist
+        [0, 0, 1],   # Species j wins
+        [1, 0, 0],   # Species i wins
+        [0, 0, 0]    # Coexistence
     ])
 
     # Plot
     plt.figure(figsize=(10, 8))
-    plt.imshow(Coex, extent=[tau_i_vec[0], tau_i_vec[1], b_i_vec[0], b_i_vec[1]],
-            origin='lower', aspect='auto', cmap=cmap, vmin=0, vmax=2)
-    plt.axhline(b_j, color='k', linestyle='--')
-    plt.axvline(tau_j, color='k', linestyle='--')
+    plt.imshow(coex_mat, extent=[x_vec[0], x_vec[-1], y_vec[0], y_vec[-1]],
+               origin='lower', aspect='auto', cmap=cmap, vmin=0, vmax=2)
+
+    # Optional reference lines
+    if x_ref is not None:
+        plt.axvline(x_ref, color='k', linestyle='--')
+    if y_ref is not None:
+        plt.axhline(y_ref, color='k', linestyle='--')
 
     # Labels and title
-    plt.xlabel(r"$\tau_i$", fontsize=20)
-    plt.ylabel(r"$b_i$", fontsize=20)
-    plt.title(fr"$b - \tau$ trade off feasibility plot for $b_j={b_j}, \tau_j={tau_j}$" +
-            fr" $(\alpha, \mu, \gamma) = ({alpha}, {mu}, {gamma})$", fontsize=18)
+    plt.xlabel(x_label, fontsize=20)
+    plt.ylabel(y_label, fontsize=20)
+    plt.title(title, fontsize=18)
 
     # Custom legend
     legend_patches = [
@@ -134,75 +185,4 @@ def coexistence_region_plotter(x_vec, y_vec, param_dict, x_label, y_label, title
     plt.legend(handles=legend_patches, title="Outcome", loc='upper right')
 
     plt.tight_layout()
-    plt.show()
-
-
-# Parameters
-b = 55
-alpha = 1
-gamma = 0.6
-
-tau_j = 0.7
-mu_j = 25.0
-
-# Vary tau_i and mu_i
-tau_i_vec = np.arange(tau_j - 0.025, tau_j + 2.001, 0.001)
-mu_i_vec = np.arange(mu_j - 20, mu_j + 0.501, 0.001)
-tau_i_grid, mu_i_grid = np.meshgrid(tau_i_vec, mu_i_vec)
-
-# Compute feasibility terms
-P_i = b * np.exp(-gamma * tau_i_grid) / (gamma + mu_i_grid) - 1
-P_j = b * np.exp(-gamma * tau_j) / (gamma + mu_j) - 1
-
-A_i = alpha * 2 * (b ** 2) * np.exp(-gamma * tau_i_grid) / ((gamma + mu_i_grid) * (gamma + 2 * mu_i_grid))
-A_j = alpha * 2 * (b ** 2) * np.exp(-gamma * tau_j) / ((gamma + mu_j) * (gamma + 2 * mu_j))
-
-B1 = np.exp(mu_j * tau_i_grid) / ((gamma + mu_i_grid) * mu_j)
-B2 = gamma * np.exp(mu_j * tau_j) / (mu_j * (gamma + mu_j) * (gamma + mu_j + mu_i_grid))
-B_coeff = (b ** 2) * np.exp(-(gamma + mu_j) * tau_i_grid)
-B = alpha * B_coeff * (B1 - B2)
-
-# Invasion feasibility conditions
-S_ij = P_i * A_j - B * P_j
-S_ji = P_j * A_i - B * P_i
-
-S_ij = (3/4) * (S_ij > 0).astype(float)
-S_ji = (1/2) * (S_ji > 0).astype(float)
-Coex = S_ij + S_ji
-
-# Anchor the color scale
-Coex[-1, -1] = 0
-# Coex[0, 0] = 2  # Optional
-
-# Colormap definition
-cmap = ListedColormap([
-    [1, 1, 1],   # Neither wins
-    [0, 0, 1],   # Spec j wins
-    [1, 0, 0],   # Spec i wins
-    [0, 0, 0]    # Coexist
-])
-
-# Plot
-plt.figure(figsize=(10, 8))
-plt.imshow(Coex, extent=[tau_i_vec[0], tau_i_vec[-1], mu_i_vec[0], mu_i_vec[-1]],
-           origin='lower', aspect='auto', cmap=cmap, vmin=0, vmax=2)
-plt.axhline(mu_j, color='k', linestyle='--')
-plt.axvline(tau_j, color='k', linestyle='--')
-
-# Labels and title
-plt.xlabel(r"$\tau_i$", fontsize=20)
-plt.ylabel(r"$\mu_i$", fontsize=20)
-plt.title(fr"$\mu - \tau$ trade off feasibility plot for $\mu_j={mu_j}, \tau_j={tau_j}$" +
-          fr" $(b, \alpha, \gamma) = ({b}, {alpha}, {gamma})$", fontsize=18)
-
-# Legend
-legend_patches = [
-    mpatches.Patch(color='white', label='Neither'),
-    mpatches.Patch(color='blue', label='Spec. j wins'),
-    mpatches.Patch(color='red', label='Spec. i wins'),
-    mpatches.Patch(color='black', label='Coex.')
-]
-plt.legend(handles=legend_patches, title="Outcome", loc='upper right')
-
-plt.tight_layout()
-plt.show()
+    plt.savefig("coexistence_region_plot.png")
